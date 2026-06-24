@@ -1,0 +1,105 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;505;600;700&family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans", sans-serif;
+  --font-serif: "Playfair Display", serif;
+  --font-mono: ui-monospace, SFMono-Regular, monospace;
+  
+  --color-brand-primary: #6366f1;
+  --color-brand-bg: #090d16;
+  --color-brand-card: #111827;
+  --color-brand-border: #1e293b;
+}
+
+/* Base style resets */
+body {
+  background-color: #0b0f19;
+  color: #e2e8f0;
+  font-family: var(--font-sans);
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0b0f19;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* ─────────────────────────────────────────────────
+   Animations — previously missing, causing silent failures
+   ───────────────────────────────────────────────── */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Thinking dots — staggered bob animation for AI loading state */
+@keyframes thinkingDot {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+/* Step progress bar fill */
+@keyframes progressFill {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.35s ease-out both;
+}
+
+.animate-fadeInScale {
+  animation: fadeInScale 0.4s ease-out both;
+}
+
+/* Thinking dot classes with staggered delays */
+.animate-thinking-1 {
+  animation: thinkingDot 1.4s ease-in-out infinite;
+}
+
+.animate-thinking-2 {
+  animation: thinkingDot 1.4s ease-in-out 0.18s infinite;
+}
+
+.animate-thinking-3 {
+  animation: thinkingDot 1.4s ease-in-out 0.36s infinite;
+}

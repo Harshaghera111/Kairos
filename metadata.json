@@ -1,0 +1,6 @@
+{
+  "name": "Kairos",
+  "description": "An autonomous deadline-execution agent that helps students and professionals complete commitments before deadlines are missed.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
