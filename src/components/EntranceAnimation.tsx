@@ -1,82 +1,94 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 interface EntranceAnimationProps {
   onComplete: () => void;
 }
 
+// Total duration (non-reduced): 3 400 ms
+// • point      0 – 700 ms
+// • timeline   700 – 1 600 ms
+// • disrupt    1 600 – 2 500 ms
+// • rebuild    2 500 – 3 100 ms
+// • brand      3 100 – 3 400 ms  → onComplete fires
+
+const PHASE_TIMINGS = {
+  timeline: 700,
+  disrupt:  1600,
+  rebuild:  2500,
+  brand:    3100,
+  complete: 3400,
+};
+
 export default function EntranceAnimation({ onComplete }: EntranceAnimationProps) {
   const [phase, setPhase] = useState<'point' | 'timeline' | 'disrupt' | 'rebuild' | 'brand'>('point');
-  const [isSkipped, setIsSkipped] = useState(false);
 
+  // Keep a stable ref to onComplete so the timer effect never needs to
+  // re-run when the parent re-renders (fixes the "re-schedule all timers"
+  // bug that caused the animation to restart mid-run).
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
+
+  // Single source of truth: all timers are created once and cleaned up on
+  // unmount.  isSkipped is handled inside the effect via a local flag.
   useEffect(() => {
-    if (isSkipped) {
-      onComplete();
+    // Respect prefers-reduced-motion: skip straight to onComplete
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) {
+      onCompleteRef.current();
       return;
     }
 
-    // Step 1: Glowing point appears (0ms - 800ms)
-    // Step 2: Point stretches into a timeline (800ms - 1700ms)
-    const t2 = setTimeout(() => {
-      setPhase('timeline');
-    }, 800);
+    let cancelled = false;
 
-    // Step 3: Disruption shifts timeline (1700ms - 2500ms)
-    const t3 = setTimeout(() => {
-      setPhase('disrupt');
-    }, 1700);
+    const t1 = setTimeout(() => { if (!cancelled) setPhase('timeline'); }, PHASE_TIMINGS.timeline);
+    const t2 = setTimeout(() => { if (!cancelled) setPhase('disrupt');  }, PHASE_TIMINGS.disrupt);
+    const t3 = setTimeout(() => { if (!cancelled) setPhase('rebuild');  }, PHASE_TIMINGS.rebuild);
+    const t4 = setTimeout(() => { if (!cancelled) setPhase('brand');    }, PHASE_TIMINGS.brand);
+    const t5 = setTimeout(() => { if (!cancelled) onCompleteRef.current(); }, PHASE_TIMINGS.complete);
 
-    // Step 4: Rebuild / adaptive recovery (2500ms - 3200ms)
-    const t4 = setTimeout(() => {
-      setPhase('rebuild');
-    }, 2500);
-
-    // Step 5: Brand text reveals (3200ms - 4200ms)
-    const t5 = setTimeout(() => {
-      setPhase('brand');
-    }, 3200);
-
-    // Finalize transition to landing page (4200ms)
-    const t6 = setTimeout(() => {
-      onComplete();
-    }, 4200);
-
-    // Listen to Escape key to skip intro
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setIsSkipped(true);
+      if (e.key === 'Escape' && !cancelled) {
+        cancelled = true;
+        onCompleteRef.current();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
+      cancelled = true;
+      clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
       clearTimeout(t4);
       clearTimeout(t5);
-      clearTimeout(t6);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isSkipped, onComplete]);
+  }, []); // ← empty array: timers are created exactly once, never restarted
+
+  const handleSkip = () => {
+    onCompleteRef.current();
+  };
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#060810] text-white transition-opacity duration-1000 ease-in-out select-none"
-      style={{
-        opacity: phase === 'brand' ? 1 : 1, // Will fade out gracefully from the wrapper
-      }}
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#060810] text-white select-none"
+      role="dialog"
+      aria-label="Kairos intro animation"
+      aria-modal="true"
     >
       {/* Skip Button */}
       <button
-        onClick={() => setIsSkipped(true)}
+        onClick={handleSkip}
         className="absolute top-6 right-6 px-4 py-1.5 rounded-full border border-white/10 hover:border-white/20 text-[11px] font-medium font-mono text-slate-400 hover:text-slate-200 transition-colors cursor-pointer bg-white/[0.02]"
-        aria-label="Skip brand story sequence (Esc)"
+        aria-label="Skip intro animation (Esc)"
+        type="button"
       >
         Skip Intro <span className="text-slate-600 ml-1">Esc</span>
       </button>
 
       {/* Main Story Arena */}
       <div className="w-full max-w-lg px-8 flex flex-col items-center justify-center text-center h-[280px]">
-        
+
         {/* Glow Blob Background */}
         <div
           className="absolute w-72 h-72 rounded-full pointer-events-none filter blur-[80px] transition-all duration-1000"
@@ -100,7 +112,7 @@ export default function EntranceAnimation({ onComplete }: EntranceAnimationProps
             </div>
           )}
 
-          {/* Phase 2: Timeline stretch & layout ticks */}
+          {/* Phase 2–5: Timeline */}
           {(phase === 'timeline' || phase === 'disrupt' || phase === 'rebuild' || phase === 'brand') && (
             <div className="w-full relative px-10">
               {/* Timeline Axis Line */}
@@ -121,14 +133,12 @@ export default function EntranceAnimation({ onComplete }: EntranceAnimationProps
                 {phase === 'rebuild' && (
                   <div
                     className="absolute top-0 h-0.5 bg-emerald-400 rounded"
-                    style={{
-                      animation: 'timelineRebuild 0.8s ease-in-out forwards',
-                    }}
+                    style={{ animation: 'timelineRebuild 0.8s ease-in-out forwards' }}
                   />
                 )}
               </div>
 
-              {/* Ticks nodes */}
+              {/* Tick nodes */}
               <div className="absolute inset-x-10 top-1/2 -translate-y-1/2 flex justify-between">
                 {[0, 1, 2].map((i) => (
                   <div
@@ -140,9 +150,7 @@ export default function EntranceAnimation({ onComplete }: EntranceAnimationProps
                         ? 'bg-emerald-500'
                         : 'bg-indigo-400 animate-[nodeTickAppear_0.3s_ease-out_both]'
                     }`}
-                    style={{
-                      animationDelay: `${i * 150}ms`,
-                    }}
+                    style={{ animationDelay: `${i * 150}ms` }}
                   />
                 ))}
               </div>
@@ -150,7 +158,7 @@ export default function EntranceAnimation({ onComplete }: EntranceAnimationProps
           )}
         </div>
 
-        {/* Narrative Captions Box */}
+        {/* Narrative Captions */}
         <div className="h-24 flex items-center justify-center">
           {phase === 'point' && (
             <p className="text-slate-400 text-xs font-mono tracking-widest animate-fadeIn">

@@ -117,7 +117,19 @@ const INITIAL_ARTIFACTS: Artifact[] = [
 ];
 
 export default function App() {
-  const [view, setView] = useState<'intro' | 'landing' | 'entering' | 'dashboard'>('intro');
+  // ─── Intro: read sessionStorage SYNCHRONOUSLY during state init so the
+  //     component never mounts with view='intro' on a return visit.
+  //     This eliminates the flash-of-dark-overlay race condition.
+  const [view, setView] = useState<'intro' | 'landing' | 'entering' | 'dashboard'>(() => {
+    try {
+      return sessionStorage.getItem('kairos-intro-completed') === 'true'
+        ? 'landing'
+        : 'intro';
+    } catch {
+      // sessionStorage blocked (e.g. private-browsing strict mode) — show intro
+      return 'intro';
+    }
+  });
   const [activeTab, setActiveTab] = useState('commitments');
   const [user, setUser] = useState<UserProfile | null>(null);
 
@@ -145,13 +157,10 @@ export default function App() {
   const [analysisExiting, setAnalysisExiting] = useState(false);
   const [activeArtifactTab, setActiveArtifactTab] = useState<string | null>('art-1');
 
-  // Skip intro animation if completed before in this browser session
-  useEffect(() => {
-    const hasSeenIntro = sessionStorage.getItem('kairos-intro-completed');
-    if (hasSeenIntro === 'true') {
-      setView('landing');
-    }
-  }, []);
+  // Ref used by the auth effect so it can check the current view without
+  // creating a stale-closure / re-subscription problem.
+  const viewRef = React.useRef(view);
+  useEffect(() => { viewRef.current = view; }, [view]);
 
   // Sync Firebase authentication rules
   useEffect(() => {
@@ -172,7 +181,14 @@ export default function App() {
         handleLoginSuccessTransition(profile);
       } else {
         setUser(null);
-        setView('landing');
+        // ─── FIX: Never interrupt the intro animation.
+        //     onAuthStateChanged fires ~100–400 ms after mount with
+        //     firebaseUser=null (no session). Without this guard it would
+        //     clobber view='intro' → 'landing' mid-animation on every first
+        //     visit, making the animation appear to "randomly skip".
+        if (viewRef.current !== 'intro') {
+          setView('landing');
+        }
         setCommitments([]);
         setSubtasks([]);
         setWorkblocks([]);
