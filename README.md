@@ -1,83 +1,299 @@
 <div align="center">
-<img width="1200" height="475" alt="Kairos Banner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+
+# ⏳ Kairos
+
+### AI Execution Coach
+
+### **Don't manage tasks. Execute them.**
+
+Kairos is an AI-powered execution coach that helps people **adapt, recover, and finish goals** when life inevitably changes.
+
+[![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-Google_Cloud_Run-4285F4?style=for-the-badge)](https://kairos-1026481702555.us-central1.run.app)
+[![Gemini AI](https://img.shields.io/badge/Powered_by-Google_Gemini-4285F4?style=for-the-badge&logo=google)](https://ai.google.dev/)
+[![React](https://img.shields.io/badge/Frontend-React-61DAFB?style=for-the-badge&logo=react)](https://react.dev/)
+[![Firebase](https://img.shields.io/badge/Backend-Firebase-FFCA28?style=for-the-badge&logo=firebase)](https://firebase.google.com/)
+
+### 🌐 Live Demo
+
+https://kairos-1026481702555.us-central1.run.app
+
 </div>
 
-# Kairos — Your Personal AI Execution Coach
+---
 
-**Kairos** is an empathetic, premium AI companion that structures roadmaps with built-in stress buffers to safeguard due dates and guide users through life blockades. It acts as an execution coach rather than a static project dashboard.
+# 📸 Screenshots
 
-## 🚀 Core Features
+> Add 4–5 screenshots after submission.
 
-- **Next Best Action Hero**: Prominently guides users to the single most critical task at any given moment to preserve momentum.
-- **AI Extraction & Roadmap Building**: Translates goal descriptions written in plain language into actionable milestones, estimating workloads and creating timeline buffers.
-- **Empathetic Narrative Coach Feed**: Structures AI decisions in a supportive diary style ("Coach's Diary"), detailing buffer reassessments and recovery steps.
-- **Stress Test Simulator**: Simulates real-life disruptions (e.g., sick days, laptop crash, surprise exams) to project buffer stability, auto-drafting extension emails or recovery steps.
-- **Firebase Auth & Firestore Sync**: Features seamless cloud database sync with fallback local sandbox storage for quick evaluation.
+Suggested order:
+
+- Landing Page
+- AI Planning
+- Dashboard
+- Stress Simulator
+- Coach's Diary
 
 ---
 
-## 🛠️ Technology Stack
+# 🚀 Why Kairos?
 
-1. **Frontend**: React (v19) + Tailwind CSS (v4) + Lucide Icons + Motion (Animations)
-2. **Backend**: Node.js Express API + ESBuild
-3. **AI Orchestration**: Google GenAI SDK (Gemini 3.5 Flash Model)
-4. **Database & Auth**: Firebase Authentication & Firestore Persistence
+Traditional productivity tools help you **create plans.**
 
----
+They don't help you **finish them.**
 
-## 💻 Local Setup and Run
+Life changes.
 
-### Prerequisites
-- Node.js (v18+)
+- You get sick.
+- Deadlines move.
+- Interviews appear.
+- Priorities change.
+- Energy drops.
 
-### Steps
+Your calendar never adapts.
 
-1. **Install Dependencies**:
-   ```bash
-   npm install
-   ```
+Your todo list never replans.
 
-2. **Configure Environment Variables**:
-   Create a `.env.local` file (copy from `.env.example`) and configure:
-   - `GEMINI_API_KEY`: Your Google AI Studio API key.
-   - Firebase keys (automatically synced if running inside the AI Studio frame).
+Eventually you abandon both.
 
-3. **Run in Development Mode**:
-   ```bash
-   npm run dev
-   ```
-   Open [http://localhost:3000](http://localhost:3000) to inspect.
+Kairos exists for this exact problem.
 
-4. **Verify Lints & Compile**:
-   ```bash
-   npm run lint
-   ```
-
-5. **Build for Production**:
-   ```bash
-   npm run build
-   ```
+Instead of becoming another task manager, Kairos acts as an **AI Execution Coach** that continuously adapts your execution plan whenever life changes.
 
 ---
 
-## 📂 Project Structure
+# 💡 Why AI?
+
+AI is not an extra feature inside Kairos.
+
+It **is** the product.
+
+Kairos uses **Google Gemini** to:
+
+- Understand goals written in natural language.
+- Break goals into actionable milestones.
+- Estimate effort and execution order.
+- Simulate unexpected disruptions.
+- Generate adaptive recovery plans.
+- Explain every decision through transparent AI reasoning.
+
+Without AI, Kairos becomes another todo application.
+
+With AI, it becomes an execution partner.
+
+---
+
+# ✨ Features
+
+- 🧠 Natural Language Goal Understanding
+- 🗺 AI Roadmap Generation
+- ⚡ Dynamic Execution Planning
+- 🔄 Continuous Replanning
+- 🚨 Stress Simulator
+- 📓 Coach's Diary
+- 💭 AI Thinking Panel
+- 🩹 Recovery Plan Generation
+- 🔐 Google Authentication
+- ☁ Google Cloud Deployment
+- 📱 Responsive Modern Interface
+
+---
+
+# ⚙️ How Kairos Works
+
+```text
+User Goal
+     │
+     ▼
+Gemini understands intent
+     │
+     ▼
+Execution Roadmap generated
+     │
+     ▼
+Progress stored in Firestore
+     │
+     ▼
+Unexpected disruption
+(Sick, Interview, Deadline...)
+     │
+     ▼
+Stress Simulator
+     │
+     ▼
+Gemini replans execution
+     │
+     ▼
+Coach's Diary explains decisions
+```
+
+---
+
+# 🛠 Tech Stack
+
+| Layer | Technology |
+|--------|------------|
+| Frontend | React, TypeScript, Vite, Tailwind CSS |
+| Backend | Node.js, Express |
+| AI | Google Gemini |
+| Authentication | Firebase Authentication |
+| Database | Firestore |
+| Cloud | Google Cloud Run |
+| Secrets | Secret Manager |
+| Containerization | Docker |
+
+---
+
+# ☁ Google Cloud Architecture
+
+Kairos is deployed completely on Google Cloud.
 
 ```
-├── assets/                       # UI visual assets
-├── dist/                         # Compiled bundle (client + server.cjs)
+                User
+                  │
+                  ▼
+        Firebase Authentication
+                  │
+                  ▼
+        Cloud Run (Express API)
+                  │
+        ┌─────────┴─────────┐
+        ▼                   ▼
+ Secret Manager        Google Gemini
+        │                   │
+        └─────────┬─────────┘
+                  ▼
+             Firestore
+                  │
+                  ▼
+             React Frontend
+```
+
+---
+
+# 🎯 What Makes Kairos Different?
+
+| Traditional Apps | Kairos |
+|------------------|---------|
+| Static task lists | Dynamic execution planning |
+| Manual rescheduling | AI replans automatically |
+| Calendar only | AI Execution Coach |
+| Shows tasks | Explains decisions |
+| User manages everything | AI assists continuously |
+
+---
+
+# 🧠 AI Workflow
+
+```
+Goal
+   ↓
+Intent Extraction
+   ↓
+Roadmap Generation
+   ↓
+Execution Tracking
+   ↓
+Disruption Simulation
+   ↓
+Adaptive Recovery Plan
+   ↓
+Coach's Diary
+```
+
+---
+
+# 📂 Project Structure
+
+```
+Kairos/
+│
 ├── src/
 │   ├── components/
-│   │   ├── Sidebar.tsx           # Empathetic side navigation
-│   │   ├── CommitmentForm.tsx    # Conversational goal planner form
-│   │   ├── ActivityLog.tsx       # AI narrative coaching log
-│   │   └── WarpConsole.tsx       # Disruption simulator console
-│   ├── lib/
-│   │   └── firebase.ts           # Firebase Client initialization & mock sandbox fallback
-│   ├── App.tsx                   # Main layout container & state coordinator
-│   ├── types.ts                  # Type definitions
-│   └── main.tsx                  # Client entrypoint
-├── server.ts                     # Express server & Gemini API structured output middleware
-├── firestore.rules               # Firestore security configuration rules
-├── firebase-applet-config.json   # Firebase configurations schema
-└── package.json                  # Dependencies and scripts
+│   ├── assets/
+│   └── App.tsx
+│
+├── server.ts
+├── Dockerfile
+├── cloudbuild.yaml
+├── package.json
+└── README.md
 ```
+
+---
+
+# 🚀 Running Locally
+
+```bash
+git clone https://github.com/Harshaghera111/Kairos.git
+
+cd Kairos
+
+npm install
+
+npm run dev
+```
+
+Create a `.env` file using the provided `.env.example`.
+
+---
+
+# ☁ Deployment
+
+Kairos is deployed using:
+
+- Docker
+- Google Cloud Build
+- Artifact Registry
+- Google Cloud Run
+
+The application is containerized and securely accesses sensitive credentials using **Google Secret Manager**.
+
+---
+
+# 📈 Future Roadmap
+
+- Google Calendar Integration
+- Mobile Application
+- Team Collaboration
+- Smart Notifications
+- Voice-Based Goal Planning
+- AI Productivity Analytics
+
+---
+
+# 👨‍💻 Developer
+
+**Harsh Aghera**
+
+Computer Science Engineering Student
+
+Google AI Hackathon 2026
+
+GitHub:
+
+https://github.com/Harshaghera111
+
+---
+
+# 🙏 Acknowledgements
+
+- Google AI
+- Google Cloud
+- Gemini API
+- Firebase
+- React
+- Tailwind CSS
+
+---
+
+<div align="center">
+
+## ⭐ Kairos
+
+### *The right plan is the one that adapts.*
+
+**Built for the Google AI Hackathon 2026**
+
+🌐 https://kairos-1026481702555.us-central1.run.app
+
+</div>
