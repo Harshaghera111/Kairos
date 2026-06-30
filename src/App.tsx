@@ -2,12 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plus, Calendar, Clock, AlertTriangle, Cpu, Sparkles, CheckCircle2, 
   User, ChevronRight, FileText, Download, Play, Flame, HelpCircle, 
-  Trash2, Layers, Compass, ExternalLink, Lightbulb, CheckSquare
+  Trash2, Layers, Compass, ExternalLink, Lightbulb, CheckSquare,
+  Menu, X
 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import CommitmentForm from './components/CommitmentForm';
 import ActivityLog from './components/ActivityLog';
 import WarpConsole from './components/WarpConsole';
+import KairosAnalysisPanel from './components/KairosAnalysisPanel';
+import EntranceAnimation from './components/EntranceAnimation';
+import LandingPage from './components/LandingPage';
 import { Commitment, SubTask, WorkBlock, AgentAction, Artifact, TimeWarpScenario, UserProfile } from './types';
 import { isUsingMock, OperationType, handleFirestoreError, db, auth } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -107,34 +111,15 @@ const INITIAL_ARTIFACTS: Artifact[] = [
     userId: 'mock-judge-uid',
     title: 'Client Communication & Submission Draft',
     type: 'email',
-    content: `### Client Submission Draft -- Figma Handover
-
-Hi Team,
-
-I am pleased to deliver the interactive high-fidelity Apex Corp Dashboard prototype for design review.
-
-Key features implemented:
-- Full responsive grid layout
-- Active component variants & auto-layout setup
-- Interactive flow click-throughs for primary checkout scenarios
-
-Looking forward to your feedback on Monday noon.
-
-Best regards,
-Creative Delivery Lead`,
+    content: `### Client Submission Draft -- Figma Handover\n\nHi Team,\n\nI am pleased to deliver the interactive high-fidelity Apex Corp Dashboard prototype for design review.\n\nKey features implemented:\n- Full responsive grid layout\n- Active component variants & auto-layout setup\n- Interactive flow click-throughs for primary checkout scenarios\n\nLooking forward to your feedback on Monday noon.\n\nBest regards,\nCreative Delivery Lead`,
     createdAt: new Date().toISOString()
   }
 ];
 
 export default function App() {
+  const [view, setView] = useState<'intro' | 'landing' | 'entering' | 'dashboard'>('intro');
   const [activeTab, setActiveTab] = useState('commitments');
-  const [user, setUser] = useState<UserProfile | null>({
-    uid: 'mock-judge-uid',
-    email: 'judge@hackathon.com',
-    displayName: 'Hackathon Judge',
-    photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
-    createdAt: new Date().toISOString()
-  });
+  const [user, setUser] = useState<UserProfile | null>(null);
 
   const [commitments, setCommitments] = useState<Commitment[]>(INITIAL_COMMITMENTS);
   const [subtasks, setSubtasks] = useState<SubTask[]>(INITIAL_SUBTASKS);
@@ -146,52 +131,48 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [selectedCommitment, setSelectedCommitment] = useState<Commitment | null>(INITIAL_COMMITMENTS[0]);
+
+  // AI Reasoning Reveal state
+  const [analysisData, setAnalysisData] = useState<{
+    title: string;
+    urgency: 'low' | 'medium' | 'high';
+    importance: 'low' | 'medium' | 'high';
+    effort: 'low' | 'medium' | 'high';
+    extractedDeadline: string;
+    reasoning: string;
+  } | null>(null);
+  const [showAnalysis, setShowAnalysis] = useState(false);
+  const [analysisExiting, setAnalysisExiting] = useState(false);
   const [activeArtifactTab, setActiveArtifactTab] = useState<string | null>('art-1');
 
-  // Helper Firestore writers
-  const saveDoc = async (collName: string, docId: string, data: any) => {
-    if (isUsingMock || !db || !user || user.uid === 'mock-judge-uid') {
-      return;
+  // Skip intro animation if completed before in this browser session
+  useEffect(() => {
+    const hasSeenIntro = sessionStorage.getItem('kairos-intro-completed');
+    if (hasSeenIntro === 'true') {
+      setView('landing');
     }
-    try {
-      await setDoc(doc(db, collName, docId), data);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `${collName}/${docId}`);
-    }
-  };
+  }, []);
 
-  const updateDocField = async (collName: string, docId: string, data: any) => {
-    if (isUsingMock || !db || !user || user.uid === 'mock-judge-uid') {
-      return;
-    }
-    try {
-      await updateDoc(doc(db, collName, docId), data);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `${collName}/${docId}`);
-    }
-  };
-
-  // Synchronize with Firebase Auth and Firestore
+  // Sync Firebase authentication rules
   useEffect(() => {
     if (isUsingMock || !auth || !db) {
-      // Keep using mock data and local states
       return;
     }
 
-    // Auth listener
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
-        setUser({
+        const profile: UserProfile = {
           uid: firebaseUser.uid,
           email: firebaseUser.email || '',
           displayName: firebaseUser.displayName || 'Authorized User',
           photoURL: firebaseUser.photoURL || null,
           createdAt: new Date().toISOString()
-        });
+        };
+        setUser(profile);
+        handleLoginSuccessTransition(profile);
       } else {
-        // Logged out
         setUser(null);
-        // Clear collections to trigger default mock data for pre-auth review
+        setView('landing');
         setCommitments([]);
         setSubtasks([]);
         setWorkblocks([]);
@@ -203,26 +184,22 @@ export default function App() {
     return () => unsubscribeAuth();
   }, []);
 
-  // Listen to Firestore changes if real user is logged in (excluding mock-judge-uid offline sandbox)
+  // Sync firestore collections
   useEffect(() => {
     if (isUsingMock || !db || !user || user.uid === 'mock-judge-uid') {
-      // Use local state presets for mock judge/offline state
       return;
     }
 
     const uid = user.uid;
 
-    // Subscriptions
     const qCommitments = query(collection(db, 'commitments'), where('userId', '==', uid));
     const unsubscribeCommitments = onSnapshot(qCommitments, (snapshot) => {
       const list: Commitment[] = [];
       snapshot.forEach((doc) => {
         list.push({ id: doc.id, ...doc.data() } as Commitment);
       });
-      // Sort by created time
       list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setCommitments(list);
-      // Select the first one if none selected
       if (list.length > 0) {
         setSelectedCommitment(prev => {
           if (!prev) return list[0];
@@ -289,11 +266,57 @@ export default function App() {
     };
   }, [user]);
 
+  const handleLoginSuccessTransition = (profile: UserProfile) => {
+    setUser(profile);
+    setView('entering');
+    setTimeout(() => {
+      setView('dashboard');
+    }, 1500);
+  };
+
+  const handleEnterSandbox = () => {
+    const sandboxProfile: UserProfile = {
+      uid: 'mock-judge-uid',
+      email: 'judge@hackathon.com',
+      displayName: 'Hackathon Judge',
+      photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop',
+      createdAt: new Date().toISOString()
+    };
+    handleLoginSuccessTransition(sandboxProfile);
+  };
+
+  const handleIntroComplete = () => {
+    sessionStorage.setItem('kairos-intro-completed', 'true');
+    setView('landing');
+  };
+
+  // Helper Firestore writers
+  const saveDoc = async (collName: string, docId: string, data: any) => {
+    if (isUsingMock || !db || !user || user.uid === 'mock-judge-uid') {
+      return;
+    }
+    try {
+      await setDoc(doc(db, collName, docId), data);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `${collName}/${docId}`);
+    }
+  };
+
+  const updateDocField = async (collName: string, docId: string, data: any) => {
+    if (isUsingMock || !db || !user || user.uid === 'mock-judge-uid') {
+      return;
+    }
+    try {
+      await updateDoc(doc(db, collName, docId), data);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `${collName}/${docId}`);
+    }
+  };
+
   // Multi-step agency logic for commitment generation
   const handleAddCommitment = async (inputText: string) => {
     setLoading(true);
 
-    // Broadcast AI progress steps to CommitmentForm's loading animation
     const steps = [
       'Reading your commitment...',
       'Extracting deadline and workload...',
@@ -309,7 +332,6 @@ export default function App() {
       setTimeout(() => setLoadingMessage(steps[4]), 3400),
     ];
 
-    // Add pending log entry to give realistic observer feeling
     const fetchLogId = 'log-fetch-' + Date.now();
     const pendingLog: AgentAction = {
       id: fetchLogId,
@@ -338,7 +360,31 @@ export default function App() {
 
       const extracted = await response.json();
 
-      // Create new commitment object
+      // ── AI REASONING REVEAL PHASE ────────────────────────────────────────
+      timers.forEach(clearTimeout);
+      setLoading(false);
+      setLoadingMessage('');
+
+      setAnalysisData({
+        title:             extracted.title             || 'Dynamic Task',
+        urgency:           extracted.urgency           || 'medium',
+        importance:        extracted.importance        || 'high',
+        effort:            extracted.effort            || 'medium',
+        extractedDeadline: extracted.extractedDeadline || new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+        reasoning:         extracted.reasoning         || 'I structured a roadmap based on the deadline, effort complexity, and optimal buffer distribution for your goal.',
+      });
+      setShowAnalysis(true);
+
+      await new Promise<void>(resolve => setTimeout(resolve, 2600));
+
+      setAnalysisExiting(true);
+      await new Promise<void>(resolve => setTimeout(resolve, 380));
+
+      setShowAnalysis(false);
+      setAnalysisExiting(false);
+      setAnalysisData(null);
+      // ── END REVEAL PHASE ─────────────────────────────────────────────────
+
       const commitmentId = 'commit-' + Date.now();
       const newCommitment: Commitment = {
         id: commitmentId,
@@ -357,10 +403,8 @@ export default function App() {
         updatedAt: new Date().toISOString()
       };
 
-      // Set new commitment to list
       setCommitments(prev => [newCommitment, ...prev]);
 
-      // Map subtasks
       const newSubtasks: SubTask[] = (extracted.plan || []).map((step: any, idx: number) => ({
         id: `sub-${commitmentId}-${idx}`,
         commitmentId,
@@ -372,7 +416,6 @@ export default function App() {
       }));
       setSubtasks(prev => [...newSubtasks, ...prev]);
 
-      // Create log showing success completion of agent run
       const completeLog: AgentAction = {
         id: 'log-complete-' + Date.now(),
         commitmentId,
@@ -386,7 +429,6 @@ export default function App() {
         status: 'success'
       };
 
-      // Add a dynamically generated artifact checklist
       const newArtifact: Artifact = {
         id: `art-${commitmentId}`,
         commitmentId,
@@ -402,7 +444,6 @@ export default function App() {
       setArtifacts(prev => [newArtifact, ...prev]);
       setActiveArtifactTab(newArtifact.id);
 
-      // Schedulable simulated work block
       const newWorkBlock: WorkBlock = {
         id: `work-${commitmentId}`,
         commitmentId,
@@ -414,7 +455,6 @@ export default function App() {
       };
       setWorkblocks(prev => [newWorkBlock, ...prev]);
 
-      // Save commitment, subtasks, workblock, logs, artifacts to Firestore
       await saveDoc('commitments', commitmentId, newCommitment);
       for (const t of newSubtasks) {
         await saveDoc('subtasks', t.id, t);
@@ -423,13 +463,11 @@ export default function App() {
       await saveDoc('workblocks', newWorkBlock.id, newWorkBlock);
       await saveDoc('logs', completeLog.id, completeLog);
 
-      // Update logs: remove pending log and replace
       setLogs(prev => [completeLog, ...prev.filter(l => l.id !== fetchLogId)]);
       setSelectedCommitment(newCommitment);
 
     } catch (err) {
       console.error(err);
-      // In case of error (e.g. no internet/key), mock gracefully to keep app functional
       const fallbackId = 'commit-fallback-' + Date.now();
       const mockCommitment: Commitment = {
         id: fallbackId,
@@ -463,7 +501,6 @@ export default function App() {
         status: 'warning'
       };
 
-      // Save mock commitment & log to Firestore if in fallback but connected
       await saveDoc('commitments', fallbackId, mockCommitment);
       await saveDoc('logs', completeLog.id, completeLog);
 
@@ -473,6 +510,9 @@ export default function App() {
       timers.forEach(clearTimeout);
       setLoading(false);
       setLoadingMessage('');
+      setShowAnalysis(false);
+      setAnalysisExiting(false);
+      setAnalysisData(null);
     }
   };
 
@@ -480,14 +520,11 @@ export default function App() {
   const handleScenarioSelect = (scenario: TimeWarpScenario) => {
     setSelectedScenarioId(scenario.id);
 
-    // Dynamic shift of risk scores and creation of warning / emergency recovery plans!
     setCommitments(prev => prev.map(c => {
-      // Shift risks significantly up
       const extraRisk = scenario.daysAdded * 15 + (c.urgency === 'high' ? 15 : 5);
       const newRisk = Math.min(100, c.riskScore + extraRisk);
       const riskLevel = newRisk > 70 ? 'high' : newRisk > 30 ? 'medium' : 'low';
       
-      // Update each record in Firestore if authenticated
       updateDocField('commitments', c.id, { riskScore: newRisk, riskLevel });
 
       return {
@@ -497,7 +534,6 @@ export default function App() {
       };
     }));
 
-    // Create an autonomous warning recovery trace log
     const warpLog: AgentAction = {
       id: 'log-warp-' + Date.now(),
       commitmentId: selectedCommitment?.id || 'all',
@@ -511,29 +547,13 @@ export default function App() {
       status: 'critical'
     };
 
-    // Autogenerate an extension notification email drafted template
     const emergencyArtifact: Artifact = {
       id: 'art-warp-emergency-' + Date.now(),
       commitmentId: selectedCommitment?.id || 'commit-1',
       userId: user?.uid || 'anonymous',
       title: `Emergency Extension Request Draft`,
       type: 'email',
-      content: `### Emergency Timeline Communication -- Extenuating Circumstances
-
-Dear Team,
-
-I am writing to notify you of an unexpected capacity reduction. Due to unforeseen circumstances, our schedule has compromised by roughly ${scenario.daysAdded} days.
-
-To ensure pristine delivery, I recommend adjusting the milestone delivery target by +3 days.
-
-Highly proactive fallback plans:
-1. Deliver wireframe derivatives immediately for async check.
-2. Complete primary layout deliverables by the remaining target.
-
-Appreciate your cooperation.
-
-Sincerely,
-Kairos Agent`,
+      content: `### Emergency Timeline Communication -- Extenuating Circumstances\n\nDear Team,\n\nI am writing to notify you of an unexpected capacity reduction. Due to unforeseen circumstances, our schedule has compromised by roughly ${scenario.daysAdded} days.\n\nTo ensure pristine delivery, I recommend adjusting the milestone delivery target by +3 days.\n\nHighly proactive fallback plans:\n1. Deliver wireframe derivatives immediately for async check.\n2. Complete primary layout deliverables by the remaining target.\n\nAppreciate your cooperation.\n\nSincerely,\nKairos Agent`,
       createdAt: new Date().toISOString()
     };
 
@@ -544,7 +564,6 @@ Kairos Agent`,
     saveDoc('logs', warpLog.id, warpLog);
     saveDoc('artifacts', emergencyArtifact.id, emergencyArtifact);
 
-    // Automatically update local state selection withshifted values
     setTimeout(() => {
       if (selectedCommitment) {
         setSelectedCommitment(prev => {
@@ -566,7 +585,6 @@ Kairos Agent`,
     if (isUsingMock || !user || user.uid === 'mock-judge-uid') {
       setCommitments(INITIAL_COMMITMENTS);
     } else {
-      // Re-initialize risk scores in Firestore
       commitments.forEach(c => {
         updateDocField('commitments', c.id, { riskScore: 15, riskLevel: 'low' });
       });
@@ -590,7 +608,6 @@ Kairos Agent`,
   };
 
   const toggleSubtask = (id: string) => {
-    // Read current state
     const currentTask = subtasks.find(s => s.id === id);
     if (!currentTask) return;
 
@@ -610,7 +627,6 @@ Kairos Agent`,
 
     updateDocField('subtasks', id, { status: nextStatus, completedAt: completedAt || null });
 
-    // Log completing step
     const isFinishing = nextStatus === 'completed';
     const stepLog: AgentAction = {
       id: 'log-step-' + Date.now(),
@@ -636,10 +652,10 @@ Kairos Agent`,
 
   const getGreeting = () => {
     const hr = new Date().getHours();
-    const name = user?.displayName ? user.displayName.split(' ')[0] : 'Harsh';
-    if (hr < 12) return `Good morning, ${name} 👋`;
-    if (hr < 17) return `Good afternoon, ${name} 👋`;
-    return `Good evening, ${name} 👋`;
+    const name = user?.displayName ? user.displayName.split(' ')[0] : 'there';
+    if (hr < 12) return `Good morning, ${name}`;
+    if (hr < 17) return `Good afternoon, ${name}`;
+    return `Good evening, ${name}`;
   };
 
   const healthyCount = commitments.filter(c => c.riskScore <= 35).length;
@@ -651,13 +667,11 @@ Kairos Agent`,
     .reduce((acc, curr) => acc + curr.effortEstimateMinutes, 0);
   const todayWorkloadHours = (totalPendingEffortMinutes / 60).toFixed(1);
 
-  // Next deadline
   const nextDeadlineCommitment = [...commitments].sort((a, b) => new Date(a.extractedDeadline).getTime() - new Date(b.extractedDeadline).getTime())[0];
   const nextDeadlineDaysLeft = nextDeadlineCommitment
     ? Math.max(0, Math.ceil((new Date(nextDeadlineCommitment.extractedDeadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  // Next Best Action
   const firstPendingSubtask = selectedCommitment 
     ? subtasks.find(s => s.commitmentId === selectedCommitment.id && s.status === 'pending')
     : subtasks.find(s => s.status === 'pending');
@@ -666,50 +680,110 @@ Kairos Agent`,
     ? commitments.find(c => c.id === firstPendingSubtask.commitmentId)
     : (commitments.length > 0 ? commitments[0] : null);
 
-  return (
-    <div className="flex h-screen w-full bg-[#080b13] text-slate-100 overflow-hidden font-sans">
-      {/* Sidebar Navigation */}
-      <Sidebar 
-        user={user} 
-        onUserChange={setUser} 
-        activeTab={activeTab} 
-        onTabChange={setActiveTab} 
-      />
+  const tabLabel = activeTab === 'commitments'
+    ? 'Commitment Roadmap'
+    : activeTab === 'activity_log'
+    ? "Coach's Diary"
+    : 'Disruption Stress Test';
 
-      {/* Main Container */}
-      <div className="flex-1 flex flex-col h-full overflow-y-auto">
-        {/* Contextual Header */}
-        <header className="px-8 py-4 bg-[#0c0f18] border-b border-[#1e293b]/50 flex justify-between items-center flex-shrink-0">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-indigo-500" />
-              <h2 className="text-sm font-semibold text-slate-300">
-                {activeTab === 'commitments'
-                  ? 'Commitment Roadmap'
-                  : activeTab === 'activity_log'
-                  ? "Coach's Diary"
-                  : 'Disruption Stress Test'}
-              </h2>
+  const tabDescription = activeTab === 'commitments'
+    ? `${commitments.length} active roadmaps · ${todayWorkloadHours}h of focus needed`
+    : activeTab === 'activity_log'
+    ? `${logs.length} coach updates recorded`
+    : 'Stress test your buffer and preview recovery steps';
+
+  // Story Intro
+  if (view === 'intro') {
+    return <EntranceAnimation onComplete={handleIntroComplete} />;
+  }
+
+  // Light Landing Page
+  if (view === 'landing') {
+    return (
+      <LandingPage 
+        onLoginSuccess={handleLoginSuccessTransition}
+        onEnterSandbox={handleEnterSandbox}
+      />
+    );
+  }
+
+  // Entering execution overlay
+  if (view === 'entering') {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#060810] text-white">
+        <div className="space-y-4 text-center">
+          <div className="relative w-16 h-16 mx-auto">
+            <span className="animate-ping absolute inset-0 rounded-full bg-indigo-500 opacity-60" />
+            <div className="w-16 h-16 rounded-full bg-indigo-600 flex items-center justify-center">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="9" stroke="white" strokeWidth="2" opacity="0.9"/>
+                <path d="M12 12 L12 6" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                <path d="M12 12 L16 14" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
             </div>
-            <p className="text-[10px] text-slate-550 mt-0.5 pl-4">
-              {activeTab === 'commitments'
-                ? `${commitments.length} active roadmaps · ${todayWorkloadHours}h of focus needed`
-                : activeTab === 'activity_log'
-                ? `${logs.length} coach updates recorded`
-                : 'Stress test your buffer and preview recovery steps'}
-            </p>
+          </div>
+          <h2 className="text-xl font-bold tracking-wider font-display animate-pulseSoft">
+            ENTERING EXECUTION MODE
+          </h2>
+          <p className="text-xs text-slate-500 max-w-xs font-mono">
+            Calibrating timeline stress indicators...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Execution Dashboard (Serves bright light theme variables)
+  return (
+    <div className="theme-light app-shell">
+      {/* Sidebar navigation */}
+      <div className="desktop-sidebar">
+        <Sidebar 
+          user={user} 
+          onUserChange={setUser} 
+          activeTab={activeTab} 
+          onTabChange={setActiveTab} 
+        />
+      </div>
+
+      {/* Main content arena */}
+      <div className="main-content">
+
+        {/* Sticky Header */}
+        <header className="app-header px-6 py-3.5 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="flex md:hidden items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center flex-shrink-0">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="white" strokeWidth="2" opacity="0.9"/>
+                  <path d="M12 12 L12 6" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+                  <path d="M12 12 L16 14" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <span className="kairos-wordmark text-sm">Kairos</span>
+            </div>
+
+            <div className="hidden md:flex items-center gap-2.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulseSoft" />
+              <h2 className="text-[13px] font-semibold text-[#111827] tracking-tight">
+                {tabLabel}
+              </h2>
+              <span className="text-slate-350">·</span>
+              <p className="text-[11px] text-slate-500 font-medium">
+                {tabDescription}
+              </p>
+            </div>
           </div>
 
           {selectedScenarioId && (
-            <div className="flex items-center gap-3 bg-indigo-950/20 border border-indigo-900/30 px-4 py-2 rounded-xl text-indigo-300 font-sans text-xs">
-              <div className="flex items-center gap-1.5 font-medium text-indigo-400">
-                <Layers className="w-4 h-4 text-indigo-400" />
-                Simulation running
+            <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 px-3.5 py-1.5 rounded-full text-xs">
+              <div className="flex items-center gap-1.5 font-medium text-indigo-600">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulseSoft" />
+                Simulation active
               </div>
-              <span className="text-slate-400 text-[11px]">Go to My Commitments to see updated buffer stability.</span>
               <button
                 onClick={clearScenarioShift}
-                className="px-2.5 py-1 rounded bg-indigo-950/80 hover:bg-indigo-900 text-indigo-200 text-xs font-medium border border-indigo-500/30 cursor-pointer transition"
+                className="text-indigo-650 hover:text-indigo-800 font-bold transition-colors cursor-pointer underline underline-offset-2"
               >
                 Reset
               </button>
@@ -717,449 +791,463 @@ Kairos Agent`,
           )}
         </header>
 
-        {/* Content Tabs */}
-        <main className="flex-1 p-8 overflow-y-auto space-y-8">
-          {activeTab === 'commitments' && (
-            <div className="max-w-6xl mx-auto space-y-8">
-              {/* ── NBA Hero: Kairos's top recommendation — the first thing the user sees ── */}
-              {firstPendingSubtask && nextBestCommitment ? (
-                <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-950/60 via-[#131a35] to-[#0d111d] border border-indigo-500/30 p-6 shadow-2xl shadow-indigo-950/30 animate-fadeInScale">
-                  <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/[0.04] to-violet-500/[0.04] pointer-events-none rounded-2xl" />
-                  <div className="absolute -top-20 -right-20 w-72 h-72 bg-indigo-500/[0.07] rounded-full blur-3xl pointer-events-none" />
+        <main className="main-scroll">
+          <div className="page-container space-y-8">
 
-                  <div className="relative flex items-center justify-between gap-6 flex-wrap">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2.5 mb-3">
-                        <span className="flex h-2 w-2 relative">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75" />
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500" />
-                        </span>
-                        <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-widest">
-                          Your Coach Recommends Next
-                        </span>
-                      </div>
-                      <h2 className="text-xl font-bold text-white mb-2 leading-tight font-display">
-                        "{firstPendingSubtask.title}"
-                      </h2>
-                      <p className="text-sm text-slate-450 mb-5">
-                        Completing this next secures your due date for <span className="text-slate-200 font-semibold">{nextBestCommitment.title}</span> and keeps your stress buffer healthy.
-                      </p>
-                      <div className="flex items-center gap-6 flex-wrap">
-                        <div>
-                          <span className="text-[10px] text-slate-500 uppercase font-semibold block mb-0.5">Estimated effort</span>
-                          <span className="text-sm font-bold text-slate-200">{firstPendingSubtask.effortEstimateMinutes} min</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-500 uppercase font-semibold block mb-0.5">Due date</span>
-                          <span className="text-sm font-bold text-slate-200">
-                            {Math.max(0, Math.ceil((new Date(nextBestCommitment.extractedDeadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} days left
+            {activeTab === 'commitments' && (
+              <div className="max-w-6xl mx-auto space-y-8 animate-fadeIn">
+
+                {/* Next Best Action Hero Card */}
+                {firstPendingSubtask && nextBestCommitment ? (
+                  <div className="relative overflow-hidden rounded-2xl border border-indigo-100 p-6 shadow-sm animate-fadeInScale"
+                    style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.02) 0%, #ffffff 100%)' }}>
+                    
+                    <div className="relative flex items-start justify-between gap-6 flex-wrap">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="ping-dot">
+                            <span className="ping-dot-inner bg-indigo-500" />
+                          </div>
+                          <span className="text-label-xs text-indigo-600 tracking-[0.12em] font-extrabold">
+                            Kairos Recommends Next
                           </span>
                         </div>
-                        <div>
-                          <span className="text-[10px] text-slate-500 uppercase font-semibold block mb-0.5">Buffer stability</span>
-                          <span className={`text-sm font-bold ${
-                            nextBestCommitment.riskLevel === 'high' ? 'text-rose-400' :
-                            nextBestCommitment.riskLevel === 'medium' ? 'text-amber-400' : 'text-emerald-400'
-                          }`}>
-                            {nextBestCommitment.riskLevel === 'high' ? 'Risk of Delay' : nextBestCommitment.riskLevel === 'medium' ? 'Compressed' : 'Secure Buffer'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => toggleSubtask(firstPendingSubtask.id)}
-                      className="flex-shrink-0 flex items-center gap-2.5 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-sm transition-all shadow-xl shadow-indigo-950/40 hover:-translate-y-0.5 hover:shadow-indigo-500/20 cursor-pointer"
-                    >
-                      <Play className="w-4 h-4" />
-                      Mark Completed
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-5 rounded-2xl bg-[#111625]/40 border border-emerald-500/10 flex items-center gap-4 animate-fadeIn">
-                  <div className="p-2.5 rounded-xl bg-emerald-500/10">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                  </div>
-                  <div>
-                    <span className="text-sm font-semibold text-slate-200 block">We are fully catch up!</span>
-                    <span className="text-xs text-slate-550">No pending milestones right now. Set a new goal below when you are ready.</span>
-                  </div>
-                </div>
-              )}
 
-              {/* ── Compact Greeting + Stats Row ── */}
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div>
-                  <h1 className="text-lg font-bold font-display tracking-tight text-white">{getGreeting()}</h1>
-                  <p className="text-slate-500 text-xs mt-0.5">Let's review our buffer roadmaps.</p>
-                </div>
-                <div className="flex items-center gap-5 flex-wrap">
-                  <div className="text-right">
-                    <span className="text-[10px] text-slate-550 uppercase font-semibold block">Today's focus time</span>
-                    <span className="text-xs font-semibold text-slate-200">{todayWorkloadHours}h planned</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] text-slate-550 uppercase font-semibold block">Next milestone due</span>
-                    <span className="text-xs font-semibold text-slate-200 truncate block max-w-[120px]">
-                      {nextDeadlineCommitment
-                        ? `${nextDeadlineDaysLeft}d — ${nextDeadlineCommitment.title.split(' ').slice(0, 2).join(' ')}`
-                        : 'None'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${
-                      actionCount > 0 ? 'bg-rose-500 animate-pulse' : attentionCount > 0 ? 'bg-amber-500' : 'bg-emerald-500'
-                    }`} />
-                    <span className="text-xs font-semibold text-slate-300">
-                      {actionCount > 0 ? 'Buffer under pressure' : attentionCount > 0 ? 'Tight buffer' : "Buffers secure"}
-                    </span>
-                  </div>
-                </div>
-              </div>
+                        <h2 className="text-display-sm text-slate-900 mb-2 leading-snug">
+                          "{firstPendingSubtask.title}"
+                        </h2>
+                        <p className="text-sm text-slate-550 mb-5 leading-relaxed">
+                          Completing this secures your deadline for{' '}
+                          <span className="text-slate-900 font-semibold">{nextBestCommitment.title}</span>{' '}
+                          and keeps your buffer healthy.
+                        </p>
 
-              {/* Intake Console Form */}
-              <CommitmentForm
-                onCommitmentAdd={handleAddCommitment}
-                loading={loading}
-                loadingMessage={loadingMessage}
-              />
-
-              {/* Grid of Commitments and Live Analysis details */}
-              {commitments.length === 0 ? (
-                <div className="text-center py-10 px-8 border border-indigo-500/20 rounded-3xl bg-[#111625]/60 hover:bg-[#111625] transition-all max-w-2xl mx-auto flex flex-col items-center justify-center animate-fadeIn shadow-2xl relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/[0.04] rounded-full blur-2xl pointer-events-none"></div>
-                  <span className="text-4xl mb-4 select-none animate-bounce">✨</span>
-                  <h2 className="text-lg font-bold text-slate-100 font-display mb-2">Welcome to Kairos! I am your Execution Coach.</h2>
-                  <p className="text-slate-400 text-xs leading-relaxed max-w-md font-sans mb-6">
-                    I don't just track tasks — I build custom roadmaps with built-in stress buffers to safeguard your due dates. Let's get started:
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full text-left mb-6">
-                    <div className="p-3 bg-[#080c16]/50 border border-[#1e293b]/50 rounded-xl">
-                      <span className="text-indigo-400 font-bold text-xs block mb-1">1. Set your Goal</span>
-                      <p className="text-[10px] text-slate-550 leading-normal font-sans">
-                        Describe what you need to deliver in the box above. Write naturally.
-                      </p>
-                    </div>
-                    <div className="p-3 bg-[#080c16]/50 border border-[#1e293b]/50 rounded-xl">
-                      <span className="text-indigo-400 font-bold text-xs block mb-1">2. Review Roadmap</span>
-                      <p className="text-[10px] text-slate-550 leading-normal font-sans">
-                        I'll divide the effort into milestones and calculate your stress buffer.
-                      </p>
-                    </div>
-                    <div className="p-3 bg-[#080c16]/50 border border-[#1e293b]/50 rounded-xl">
-                      <span className="text-indigo-400 font-bold text-xs block mb-1">3. Stress Test</span>
-                      <p className="text-[10px] text-slate-550 leading-normal font-sans">
-                        Use the "Stress Test" tool to test how your plans hold up when life happens.
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-indigo-400 text-[11px] font-semibold animate-pulse">
-                    Add a goal above to initialize your first stress-free roadmap!
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                  {/* Left Side: Redesigned Active Commitments List */}
-                  <div className="lg:col-span-5 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400 font-semibold text-xs tracking-wider uppercase">Your Commitments</span>
-                      <span className="text-xs text-slate-500 font-medium font-sans">{commitments.length} active</span>
-                    </div>
-
-                    {commitments.map((commitment) => {
-                      const isSelected = selectedCommitment?.id === commitment.id;
-                      const durationLeft = new Date(commitment.extractedDeadline).getTime() - Date.now();
-                      const daysLeft = Math.max(0, Math.ceil(durationLeft / (1000 * 60 * 60 * 24)));
-
-                      const parsedSubtasks = subtasks.filter(s => s.commitmentId === commitment.id);
-                      const completedCount = parsedSubtasks.filter(s => s.status === 'completed').length;
-                      const percent = parsedSubtasks.length > 0 ? Math.round((completedCount / parsedSubtasks.length) * 100) : 0;
-                      const remainingSubtasks = parsedSubtasks.filter(s => s.status === 'pending');
-
-                      const nextTaskToRecommend = remainingSubtasks[0];
-                      let recommendationText = "All milestones completed. Excellent focus buffer!";
-                      if (nextTaskToRecommend) {
-                        recommendationText = `Complete "${nextTaskToRecommend.title}" to maintain buffer.`;
-                      }
-
-                      return (
-                        <div 
-                          key={commitment.id}
-                          onClick={() => setSelectedCommitment(commitment)}
-                          className={`p-5 rounded-2xl cursor-pointer transition-all duration-200 border text-left flex flex-col space-y-4 ${
-                            isSelected 
-                              ? 'bg-[#121727] border-indigo-500/50 shadow-lg shadow-indigo-950/15 ring-1 ring-indigo-500/25' 
-                              : 'bg-[#111625]/60 hover:bg-[#111625] border-[#1e293b]/70 hover:border-[#334155]'
-                          }`}
-                        >
-                          <div className="flex justify-between items-start gap-4">
-                            <div className="space-y-1">
-                              <h3 className="font-semibold text-slate-100 text-sm leading-snug">
-                                {commitment.title}
-                              </h3>
-                              <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                                <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                                <span>Due in {daysLeft} Days</span>
-                              </div>
-                            </div>
-                            
-                            <span className={`text-[10px] uppercase font-sans font-semibold px-2 py-0.5 rounded border flex-shrink-0 ${
-                              commitment.riskLevel === 'high'
-                                ? 'bg-rose-950/30 text-rose-300 border-rose-900/30'
-                                : commitment.riskLevel === 'medium'
-                                ? 'bg-amber-950/30 text-amber-300 border-amber-900/30'
-                                : 'bg-indigo-950/30 text-indigo-300 border-indigo-900/30'
-                            }`}>
-                              {commitment.riskLevel === 'high' ? 'Risk of Delay' : commitment.riskLevel === 'medium' ? 'Compressed' : 'Secure Buffer'}
-                              {commitment.riskLevel === 'high' ? 'High Risk' : commitment.riskLevel === 'medium' ? 'Compressed' : 'Stable'}
+                        <div className="flex items-center gap-6 flex-wrap">
+                          <div>
+                            <span className="text-label-xs text-slate-400 block mb-1">Estimated effort</span>
+                            <span className="text-xs font-bold text-slate-800">{firstPendingSubtask.effortEstimateMinutes} min</span>
+                          </div>
+                          <div>
+                            <span className="text-label-xs text-slate-400 block mb-1">Days remaining</span>
+                            <span className="text-xs font-bold text-slate-800">
+                              {Math.max(0, Math.ceil((new Date(nextBestCommitment.extractedDeadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} days
                             </span>
                           </div>
+                          <div>
+                            <span className="text-label-xs text-slate-400 block mb-1">Buffer stability</span>
+                            <span className={`text-xs font-bold ${
+                              nextBestCommitment.riskLevel === 'high' ? 'text-red-650' :
+                              nextBestCommitment.riskLevel === 'medium' ? 'text-amber-650' : 'text-emerald-650'
+                            }`}>
+                              {nextBestCommitment.riskLevel === 'high' ? 'Risk of Delay' 
+                                : nextBestCommitment.riskLevel === 'medium' ? 'Compressed' 
+                                : 'Secure Buffer'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
 
-                          {/* Progress */}
-                          <div className="space-y-1.5">
-                            <div className="flex justify-between text-[10px] text-slate-550 font-medium">
-                              <span>Milestones Cleared</span>
-                              <span>{percent}%</span>
+                      <button
+                        onClick={() => toggleSubtask(firstPendingSubtask.id)}
+                        className="flex-shrink-0 flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs transition-all shadow-md hover:-translate-y-0.5 hover:shadow-lg cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        Mark Done
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-5 rounded-2xl border border-emerald-150 flex items-center gap-4 animate-fadeIn"
+                    style={{ background: 'rgba(16,185,129,0.03)' }}>
+                    <div className="p-2.5 rounded-xl bg-emerald-50 flex-shrink-0">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-bold text-slate-800 block">All caught up!</span>
+                      <span className="text-xs text-slate-500">No pending milestones right now. Set a new goal below when you're ready.</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <h1 className="text-display-sm text-slate-900 font-display">{getGreeting()} 👋</h1>
+                    <p className="text-slate-500 text-xs mt-0.5">Here's your execution overview.</p>
+                  </div>
+                  <div className="flex items-center gap-5 flex-wrap">
+                    <div className="text-right">
+                      <span className="text-label-xs text-slate-400 block mb-0.5">Focus needed today</span>
+                      <span className="text-xs font-bold text-slate-800">{todayWorkloadHours}h planned</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-label-xs text-slate-400 block mb-0.5">Next deadline</span>
+                      <span className="text-xs font-bold text-slate-800 truncate block max-w-[130px]">
+                        {nextDeadlineCommitment
+                          ? `${nextDeadlineDaysLeft}d — ${nextDeadlineCommitment.title.split(' ').slice(0, 2).join(' ')}`
+                          : 'None'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`status-dot ${
+                        actionCount > 0 ? 'status-dot-danger' 
+                        : attentionCount > 0 ? 'status-dot-warning' 
+                        : 'status-dot-success'
+                      }`} />
+                      <span className="text-xs font-semibold text-slate-700">
+                        {actionCount > 0 ? 'Buffer under pressure' 
+                          : attentionCount > 0 ? 'Tight buffer' 
+                          : 'Buffers secure'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {showAnalysis && analysisData ? (
+                  <KairosAnalysisPanel
+                    title={analysisData.title}
+                    urgency={analysisData.urgency}
+                    importance={analysisData.importance}
+                    effort={analysisData.effort}
+                    extractedDeadline={analysisData.extractedDeadline}
+                    reasoning={analysisData.reasoning}
+                    exiting={analysisExiting}
+                  />
+                ) : (
+                  <CommitmentForm
+                    onCommitmentAdd={handleAddCommitment}
+                    loading={loading}
+                    loadingMessage={loadingMessage}
+                  />
+                )}
+
+                {commitments.length === 0 ? (
+                  <div className="text-center py-14 px-8 card max-w-2xl mx-auto flex flex-col items-center justify-center animate-fadeIn relative overflow-hidden">
+                    <span className="text-4xl mb-5 select-none animate-float">✨</span>
+                    <h2 className="text-display-sm text-slate-900 mb-2">Welcome to Kairos</h2>
+                    <p className="text-slate-500 text-sm leading-relaxed max-w-sm mb-7">
+                      I build custom roadmaps with stress buffers to safeguard your due dates.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full text-left mb-6">
+                      {[
+                        { num: '01', title: 'Set your Goal', desc: 'Describe what you need to deliver. Write naturally.' },
+                        { num: '02', title: 'Review Roadmap', desc: "I'll divide the effort and calculate your stress buffer." },
+                        { num: '03', title: 'Stress Test', desc: 'See how your plans hold up when life happens.' },
+                      ].map(step => (
+                        <div key={step.num} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                          <span className="text-indigo-600 font-bold text-xs block mb-1 font-mono">{step.num}</span>
+                          <span className="text-slate-800 font-bold text-xs block mb-0.5">{step.title}</span>
+                          <p className="text-[11px] text-slate-550 leading-relaxed">{step.desc}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <div className="lg:col-span-5 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-label-sm text-slate-400 font-extrabold">Your Commitments</span>
+                        <span className="badge badge-brand">{commitments.length} active</span>
+                      </div>
+
+                      {commitments.map((commitment) => {
+                        const isSelected = selectedCommitment?.id === commitment.id;
+                        const daysLeft = Math.max(0, Math.ceil((new Date(commitment.extractedDeadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+                        const parsedSubtasks = subtasks.filter(s => s.commitmentId === commitment.id);
+                        const completedCount = parsedSubtasks.filter(s => s.status === 'completed').length;
+                        const percent = parsedSubtasks.length > 0 ? Math.round((completedCount / parsedSubtasks.length) * 100) : 0;
+                        const remainingSubtasks = parsedSubtasks.filter(s => s.status === 'pending');
+                        const nextTaskToRecommend = remainingSubtasks[0];
+                        const recommendationText = nextTaskToRecommend
+                          ? `Complete "${nextTaskToRecommend.title}" to maintain buffer.`
+                          : 'All milestones completed. Excellent focus buffer!';
+
+                        return (
+                          <div
+                            key={commitment.id}
+                            onClick={() => setSelectedCommitment(commitment)}
+                            className={`p-5 rounded-xl cursor-pointer border flex flex-col space-y-4 transition-all duration-200 ${
+                              isSelected 
+                                ? 'card-active' 
+                                : 'card card-interactive'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start gap-3">
+                              <div className="space-y-1 min-w-0">
+                                <h3 className="font-bold text-slate-800 text-sm leading-snug truncate">
+                                  {commitment.title}
+                                </h3>
+                                <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                                  <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
+                                  <span>Due in {daysLeft} day{daysLeft !== 1 ? 's' : ''}</span>
+                                </div>
+                              </div>
+                              <span className={`badge flex-shrink-0 ${
+                                commitment.riskLevel === 'high' ? 'badge-danger'
+                                  : commitment.riskLevel === 'medium' ? 'badge-warning'
+                                  : 'badge-success'
+                              }`}>
+                                {commitment.riskLevel === 'high' ? 'High Risk' 
+                                  : commitment.riskLevel === 'medium' ? 'Compressed' 
+                                  : 'Stable'}
+                              </span>
                             </div>
-                            <div className="w-full bg-[#080b13] rounded-full h-1 overflow-hidden">
-                              <div className="bg-indigo-500 h-1 rounded-full transition-all duration-300" style={{ width: `${percent}%` }}></div>
+
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between text-[10px] text-slate-500 font-bold">
+                                <span>Milestones cleared</span>
+                                <span>{percent}%</span>
+                              </div>
+                              <div className="progress-track">
+                                <div 
+                                  className={`progress-fill ${
+                                    commitment.riskLevel === 'high' ? 'progress-fill-danger'
+                                    : commitment.riskLevel === 'medium' ? 'progress-fill-warning'
+                                    : 'progress-fill-brand'
+                                  }`}
+                                  style={{ width: `${percent}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            {remainingSubtasks.length > 0 && (
+                              <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                                <span className="text-label-xs text-slate-400 block">Remaining steps</span>
+                                <div className="space-y-1">
+                                  {remainingSubtasks.slice(0, 2).map(sub => (
+                                    <div key={sub.id} className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                                      <span className="text-slate-400 flex-shrink-0">›</span>
+                                      <span className="truncate">{sub.title}</span>
+                                    </div>
+                                  ))}
+                                  {remainingSubtasks.length > 2 && (
+                                    <span className="text-[10px] text-slate-400 block pl-3">+{remainingSubtasks.length - 2} more</span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="p-3 rounded-lg ai-surface text-xs">
+                              <span className="text-label-xs text-indigo-500 block mb-1">My Advice</span>
+                              <p className="text-slate-500 leading-relaxed font-medium">{recommendationText}</p>
+                            </div>
+
+                            <div className="flex justify-end">
+                              <span className="text-[11px] font-bold text-indigo-650 hover:text-indigo-800 flex items-center gap-1 transition-colors cursor-pointer">
+                                View roadmap <ChevronRight className="w-3 h-3" />
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="lg:col-span-7">
+                      {selectedCommitment ? (
+                        <div className="card p-6 space-y-6 relative overflow-hidden">
+                          <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+                            <div className="min-w-0 flex-1">
+                              <h3 className="text-display-sm text-slate-900 leading-snug mb-1">
+                                {selectedCommitment.title}
+                              </h3>
+                              <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                                <Calendar className="w-3 h-3 flex-shrink-0" />
+                                <span>
+                                  Due {new Date(selectedCommitment.extractedDeadline).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0 ml-4">
+                              <span className="text-label-xs text-slate-400 block mb-1 font-bold">Buffer Stability</span>
+                              <span className={`text-sm font-extrabold ${
+                                selectedCommitment.riskLevel === 'high' ? 'text-red-650'
+                                  : selectedCommitment.riskLevel === 'medium' ? 'text-amber-650'
+                                  : 'text-emerald-650'
+                              }`}>
+                                {selectedCommitment.riskLevel === 'high' ? 'Risk of Delay' 
+                                  : selectedCommitment.riskLevel === 'medium' ? 'Compressed' 
+                                  : 'Secure Buffer'}
+                              </span>
                             </div>
                           </div>
 
-                          {/* Remaining Tasks */}
-                          {remainingSubtasks.length > 0 && (
-                            <div className="pt-2 border-t border-[#1e293b]/40 space-y-1">
-                              <span className="text-[9.5px] text-slate-550 font-semibold uppercase tracking-wider block">Remaining Steps</span>
-                              <div className="space-y-1">
-                                {remainingSubtasks.slice(0, 2).map(sub => (
-                                  <div key={sub.id} className="flex items-center gap-1.5 text-[11px] text-slate-400 truncate">
-                                    <span className="text-slate-600">•</span>
-                                    <span className="truncate">{sub.title}</span>
-                                  </div>
-                                ))}
-                                {remainingSubtasks.length > 2 && (
-                                  <span className="text-[10px] text-slate-500 italic block pl-2">+{remainingSubtasks.length - 2} more tasks</span>
-                                )}
+                          {selectedCommitment.riskScore > 50 && (
+                            <div className="p-4 rounded-xl border border-red-150 flex items-start gap-3 text-xs"
+                              style={{ background: 'rgba(239,68,68,0.03)' }}>
+                              <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                              <div>
+                                <h4 className="font-semibold text-red-600 mb-0.5">Buffer is compressed</h4>
+                                <p className="text-slate-500 leading-relaxed">
+                                  Cutting it close. I've generated a timeline recovery draft — check AI Drafts below.
+                                </p>
                               </div>
                             </div>
                           )}
 
-                          {/* Kairos Recommendation */}
-                          <div className="p-3 rounded-xl bg-indigo-950/15 border border-indigo-500/10 text-xs text-slate-300">
-                            <span className="text-[9px] font-semibold text-indigo-400 block uppercase tracking-wide mb-0.5">My Advice</span>
-                            <p className="text-slate-400 font-sans leading-relaxed">
-                              {recommendationText}
-                            </p>
-                          </div>
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-label-sm text-slate-400 font-bold">Coach's Roadmap</span>
+                              <span className="badge badge-brand">AI Structured</span>
+                            </div>
 
-                           <div className="flex justify-end pt-1">
-                            <span className="text-[11px] font-medium text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer">
-                              Expand Roadmap <ChevronRight className="w-3 h-3" />
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {loading && (
-                      <div className="p-5 rounded-2xl border border-indigo-500/20 bg-[#121727]/30 animate-pulse space-y-4">
-                        <div className="flex justify-between items-center">
-                          <div className="h-4 bg-slate-800 rounded w-1/2"></div>
-                          <div className="h-4 bg-slate-800 rounded w-16"></div>
-                        </div>
-                        <div className="h-3 bg-slate-800 rounded w-1/3"></div>
-                        <div className="space-y-2">
-                          <div className="h-2 bg-slate-800 rounded w-full"></div>
-                          <div className="h-2 bg-slate-800 rounded w-5/6"></div>
-                        </div>
-                        <p className="text-xs text-slate-500 italic">Kairos is calibrating planning parameters...</p>
-                      </div>
-                    )}
-                  </div>
-
-                {/* Right Side: Deep analysis dashboard (Col 7) */}
-                <div className="lg:col-span-7">
-                  {selectedCommitment ? (
-                    <div className="bg-[#111625] border border-[#1e293b]/70 rounded-2xl p-6 shadow-xl space-y-6 relative overflow-hidden">
-                      {/* Atmospheric background */}
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/[0.02] rounded-full blur-2xl pointer-events-none"></div>
-
-                      <div className="flex items-center justify-between border-b border-[#1e293b]/50 pb-4 relative">
-                        <div>
-                          <h3 className="text-base font-bold font-display text-slate-100 leading-snug">
-                            {selectedCommitment.title}
-                          </h3>
-                          <span className="text-[10px] text-slate-500 mt-1 block">
-                            Due {new Date(selectedCommitment.extractedDeadline).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
-                          </span>
-                        </div>
-
-                        <div className="text-right flex-shrink-0 ml-4">
-                          <span className="text-[10px] text-slate-550 uppercase tracking-wider block font-semibold">
-                            Buffer Stability
-                          </span>
-                          <span className={`text-base font-bold ${
-                            selectedCommitment.riskLevel === 'high'
-                              ? 'text-rose-400'
-                              : selectedCommitment.riskLevel === 'medium'
-                              ? 'text-amber-400'
-                              : 'text-emerald-400'
-                          }`}>
-                            {selectedCommitment.riskLevel === 'high' ? 'Risk of Delay' : selectedCommitment.riskLevel === 'medium' ? 'Compressed' : 'Secure Buffer'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Calming Buffer Action Suggestion Banner */}
-                      {selectedCommitment.riskScore > 50 && (
-                        <div className="p-4 bg-rose-950/15 border border-rose-900/30 rounded-xl space-y-2 text-xs flex items-start gap-3">
-                          <AlertTriangle className="w-5 h-5 text-rose-450 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <h4 className="font-semibold text-rose-300 font-sans">Heads up: Buffer is compressed.</h4>
-                            <p className="text-slate-400 text-[11px] mt-0.5 leading-relaxed font-sans">
-                              We are cutting it close here. I have generated a timeline recovery draft and streamlined your milestones below — check AI Drafts.
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Milestones execution list */}
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-450 font-semibold uppercase tracking-wider">
-                            Coach's Roadmap
-                          </span>
-                          <span className="text-[10px] text-indigo-400 font-medium bg-indigo-950/40 border border-indigo-900/40 px-2 py-0.5 rounded">
-                            AI Structured
-                          </span>
-                        </div>
-
-                        <div className="space-y-2">
-                          {activeCommitmentSubtasks.map((task) => {
-                            const isDone = task.status === 'completed';
-                            return (
-                              <div 
-                                key={task.id}
-                                onClick={() => toggleSubtask(task.id)}
-                                className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 text-left transition-all duration-150 cursor-pointer ${
-                                  isDone 
-                                    ? 'bg-[#080b13]/40 border-indigo-500/10 text-slate-500' 
-                                    : 'bg-[#080c16]/70 hover:bg-[#080c16] border-[#1e293b]/70 text-slate-200 hover:border-indigo-500/20'
-                                }`}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div className={`p-0.5 rounded transition ${isDone ? 'text-indigo-450' : 'text-slate-550'}`}>
-                                    <CheckSquare className="w-4 h-4" />
+                            <div className="space-y-2">
+                              {activeCommitmentSubtasks.map((task) => {
+                                const isDone = task.status === 'completed';
+                                return (
+                                  <div
+                                    key={task.id}
+                                    onClick={() => toggleSubtask(task.id)}
+                                    className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 transition-all duration-150 cursor-pointer group ${
+                                      isDone
+                                        ? 'border-slate-100 opacity-60'
+                                        : 'border-slate-200/60 hover:border-indigo-100 hover:bg-slate-50'
+                                    }`}
+                                    style={{ background: isDone ? 'rgba(0,0,0,0.01)' : '#ffffff' }}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all ${
+                                        isDone 
+                                          ? 'bg-indigo-600 border-indigo-500' 
+                                          : 'border-slate-300 group-hover:border-indigo-500'
+                                      }`}>
+                                        {isDone && (
+                                          <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12">
+                                            <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                          </svg>
+                                        )}
+                                      </div>
+                                      <span className={`text-xs font-semibold ${isDone ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                                        {task.title}
+                                      </span>
+                                    </div>
+                                    <span className="text-[10px] font-mono text-slate-400 flex-shrink-0">
+                                      {task.effortEstimateMinutes}m
+                                    </span>
                                   </div>
-                                  <span className={`text-xs ${isDone ? 'line-through text-slate-500 font-medium' : 'font-medium'}`}>
-                                    {task.title}
-                                  </span>
-                                </div>
-                                <span className="text-[10px] font-mono text-slate-500 flex-shrink-0">
-                                  {task.effortEstimateMinutes} min
-                                </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {activeCommitmentArtifacts.length > 0 && (
+                            <div className="border-t border-slate-100 pt-5 space-y-3">
+                              <div className="flex items-center gap-2">
+                                <FileText className="w-3.5 h-3.5 text-indigo-500" />
+                                <span className="text-label-sm text-slate-400">Coach's Companion Drafts</span>
                               </div>
-                            );
-                          })}
+
+                              <div className="rounded-xl border border-slate-200 overflow-hidden"
+                                style={{ background: '#F6F8FA' }}>
+                                <div className="px-3 py-2 border-b border-slate-200 flex gap-1.5 overflow-x-auto"
+                                  style={{ background: '#ffffff' }}>
+                                  {activeCommitmentArtifacts.map(art => (
+                                    <button
+                                      key={art.id}
+                                      onClick={() => setActiveArtifactTab(art.id)}
+                                      className={`px-3 py-1.5 text-xs rounded-lg font-bold transition cursor-pointer whitespace-nowrap ${
+                                        activeArtifactTab === art.id
+                                          ? 'bg-[#111827] text-white shadow-sm'
+                                          : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      {art.title}
+                                    </button>
+                                  ))}
+                                </div>
+
+                                <div className="p-4 text-xs font-mono text-slate-700 leading-relaxed whitespace-pre-line max-h-52 overflow-y-auto bg-white/50">
+                                  {artifacts.find(a => a.id === activeArtifactTab)?.content}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      </div>
-
-                      {/* Generated Documents Artifacts */}
-                      {activeCommitmentArtifacts.length > 0 && (
-                        <div className="border-t border-[#1e293b]/60 pt-5 space-y-4">
-                          <div className="flex items-center gap-2">
-                            <FileText className="w-4 h-4 text-indigo-400" />
-                            <span className="text-xs text-slate-450 font-semibold uppercase tracking-wider">
-                              Coach's Companion Drafts
-                            </span>
-                          </div>
-
-                          <div className="bg-[#080c16]/50 border border-[#1e293b]/70 rounded-xl overflow-hidden">
-                            {/* Inner tab selectors */}
-                            <div className="bg-[#0c101d] px-3 py-2 border-b border-[#1e293b]/40 flex gap-2">
-                              {activeCommitmentArtifacts.map(art => (
-                                <button
-                                  key={art.id}
-                                  onClick={() => setActiveArtifactTab(art.id)}
-                                  className={`px-3 py-1.5 text-xs rounded-lg font-medium transition cursor-pointer ${
-                                    activeArtifactTab === art.id 
-                                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-950/20' 
-                                      : 'text-slate-400 hover:text-white'
-                                  }`}
-                                >
-                                  {art.title}
-                                </button>
-                              ))}
-                            </div>
-
-                            <div className="p-4 text-xs font-serif text-slate-300 leading-relaxed whitespace-pre-line max-h-56 overflow-y-auto bg-slate-950/20 italic">
-                              {artifacts.find(a => a.id === activeArtifactTab)?.content}
-                            </div>
-                          </div>
+                      ) : (
+                        <div className="card border-dashed p-14 text-center flex flex-col items-center justify-center">
+                          <HelpCircle className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+                          <p className="text-slate-400 text-sm">
+                            Select a commitment to examine milestones and explore companion drafts.
+                          </p>
                         </div>
                       )}
                     </div>
-                  ) : (
-                    <div className="bg-[#111625]/20 border border-dashed border-[#1e293b]/70 rounded-2xl p-12 text-center">
-                      <HelpCircle className="w-8 h-8 text-slate-600 mx-auto mb-3" />
-                      <p className="text-slate-500 text-sm font-sans">
-                        Select a commitment from your list to examine milestones, plan buffers, and explore companion draft templates.
-                      </p>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             )}
-            </div>
-          )}
 
-          {activeTab === 'activity_log' && (
-            <div className="max-w-4xl mx-auto space-y-6">
-              <div className="flex flex-col gap-1.5">
-                <h1 className="text-2xl font-bold font-display tracking-tight text-white">What Kairos Did</h1>
-                <p className="text-slate-400 text-sm">
-                  Every decision Kairos made while you were working — explained in plain language.
-                </p>
-              </div>
-
-              <ActivityLog logs={logs} />
-            </div>
-          )}
-
-          {activeTab === 'warp_simulator' && (
-            <div className="max-w-4xl mx-auto space-y-8">
-              <div className="flex flex-col gap-1.5">
-                <h1 className="text-2xl font-bold font-display tracking-tight text-white">What If?</h1>
-                <p className="text-slate-400 text-sm">
-                  Simulate a disruption — sick day, laptop failure, surprise exam — and see exactly how your commitments hold up.
-                </p>
-              </div>
-
-              <WarpConsole
-                onScenarioSelect={handleScenarioSelect}
-                selectedScenarioId={selectedScenarioId}
-                commitments={commitments}
-                subtasks={subtasks}
-              />
-
-              {/* Stress simulation status visual outcome logs */}
-              {selectedScenarioId && (
-                <div className="p-5 bg-indigo-950/10 border border-indigo-900/30 rounded-2xl flex items-center gap-4 text-sm max-w-4xl animate-fadeIn">
-                  <div className="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-455 flex-shrink-0">
-                    <Layers className="w-5 h-5 text-indigo-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-slate-200 mb-1">Stress Simulation Active</h4>
-                    <span className="text-slate-450 leading-relaxed text-xs block font-sans">
-                      I have recalculated your target timelines and stress buffers to project potential constraints. Check your commitments list to review updated buffer stability, or view the Coach's Diary to inspect my adaptive planning advice.
-                    </span>
-                  </div>
+            {activeTab === 'activity_log' && (
+              <div className="max-w-3xl mx-auto space-y-6 animate-fadeIn">
+                <div>
+                  <h1 className="text-display-md text-slate-900 font-display">What Kairos Did</h1>
+                  <p className="text-slate-500 text-sm mt-1">
+                    Every decision I made while you were working — explained in plain language.
+                  </p>
                 </div>
-              )}
-            </div>
-          )}
+                <ActivityLog logs={logs} />
+              </div>
+            )}
+
+            {activeTab === 'warp_simulator' && (
+              <div className="max-w-4xl mx-auto space-y-7 animate-fadeIn">
+                <div>
+                  <h1 className="text-display-md text-slate-900 font-display">What If?</h1>
+                  <p className="text-slate-500 text-sm mt-1">
+                    Simulate a disruption — sick day, laptop failure, surprise exam — and see exactly how your commitments hold up.
+                  </p>
+                </div>
+
+                <WarpConsole
+                  onScenarioSelect={handleScenarioSelect}
+                  selectedScenarioId={selectedScenarioId}
+                  commitments={commitments}
+                  subtasks={subtasks}
+                />
+
+                {selectedScenarioId && (
+                  <div className="p-5 rounded-2xl border border-indigo-150 flex items-center gap-4 text-sm animate-fadeIn"
+                    style={{ background: 'rgba(99,102,241,0.03)' }}>
+                    <div className="p-2.5 rounded-xl bg-indigo-50 flex-shrink-0">
+                      <Layers className="w-5 h-5 text-indigo-500" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-slate-800 mb-0.5">Stress Simulation Active</h4>
+                      <span className="text-slate-500 text-xs leading-relaxed">
+                        Timelines and stress buffers have been recalculated. Check your commitments list to review updated buffer stability.
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </main>
       </div>
+
+      <nav className="mobile-nav">
+        {[
+          { id: 'commitments', icon: Compass, label: 'Roadmaps' },
+          { id: 'activity_log', icon: Sparkles, label: "Diary" },
+          { id: 'warp_simulator', icon: Layers, label: 'Stress Test' },
+        ].map(({ id, icon: Icon, label }) => {
+          const isActive = activeTab === id;
+          return (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`flex-1 flex flex-col items-center gap-1 py-1 rounded-xl transition-all cursor-pointer ${
+                isActive ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <div className={`p-1.5 rounded-lg transition-all ${isActive ? 'bg-indigo-50' : ''}`}>
+                <Icon className="w-5 h-5" />
+              </div>
+              <span className={`text-[10px] font-bold ${isActive ? 'text-indigo-600' : 'text-slate-500'}`}>
+                {label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 }
