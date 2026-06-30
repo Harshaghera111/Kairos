@@ -4,19 +4,24 @@ interface EntranceAnimationProps {
   onComplete: () => void;
 }
 
-// Total duration (non-reduced): 3 400 ms
-// • point      0 – 700 ms
-// • timeline   700 – 1 600 ms
-// • disrupt    1 600 – 2 500 ms
-// • rebuild    2 500 – 3 100 ms
-// • brand      3 100 – 3 400 ms  → onComplete fires
-
+// ─── Timing constants ─────────────────────────────────────────────────────
+// Total non-reduced duration: 3 400 ms
 const PHASE_TIMINGS = {
   timeline: 700,
   disrupt:  1600,
   rebuild:  2500,
   brand:    3100,
   complete: 3400,
+};
+
+// ─── Per-component timestamp origin ──────────────────────────────────────
+const edbg = (label: string, extra?: Record<string, unknown>) => {
+  // eslint-disable-next-line no-console
+  console.log(
+    `%c[ENTRANCE ${performance.now().toFixed(1)}ms] ${label}`,
+    'color:#10b981;font-weight:bold',
+    extra ?? ''
+  );
 };
 
 export default function EntranceAnimation({ onComplete }: EntranceAnimationProps) {
@@ -29,25 +34,46 @@ export default function EntranceAnimation({ onComplete }: EntranceAnimationProps
   useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
 
   // Single source of truth: all timers are created once and cleaned up on
-  // unmount.  isSkipped is handled inside the effect via a local flag.
+  // unmount. isSkipped is handled inside the effect via a local flag.
   useEffect(() => {
+    edbg('Entrance mounted — scheduling timers');
+
     // Respect prefers-reduced-motion: skip straight to onComplete
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (prefersReduced) {
+      edbg('prefers-reduced-motion: skipping immediately');
       onCompleteRef.current();
       return;
     }
 
     let cancelled = false;
 
-    const t1 = setTimeout(() => { if (!cancelled) setPhase('timeline'); }, PHASE_TIMINGS.timeline);
-    const t2 = setTimeout(() => { if (!cancelled) setPhase('disrupt');  }, PHASE_TIMINGS.disrupt);
-    const t3 = setTimeout(() => { if (!cancelled) setPhase('rebuild');  }, PHASE_TIMINGS.rebuild);
-    const t4 = setTimeout(() => { if (!cancelled) setPhase('brand');    }, PHASE_TIMINGS.brand);
-    const t5 = setTimeout(() => { if (!cancelled) onCompleteRef.current(); }, PHASE_TIMINGS.complete);
+    const t1 = setTimeout(() => {
+      if (!cancelled) { edbg('phase → timeline'); setPhase('timeline'); }
+    }, PHASE_TIMINGS.timeline);
+
+    const t2 = setTimeout(() => {
+      if (!cancelled) { edbg('phase → disrupt'); setPhase('disrupt'); }
+    }, PHASE_TIMINGS.disrupt);
+
+    const t3 = setTimeout(() => {
+      if (!cancelled) { edbg('phase → rebuild'); setPhase('rebuild'); }
+    }, PHASE_TIMINGS.rebuild);
+
+    const t4 = setTimeout(() => {
+      if (!cancelled) { edbg('phase → brand'); setPhase('brand'); }
+    }, PHASE_TIMINGS.brand);
+
+    const t5 = setTimeout(() => {
+      if (!cancelled) {
+        edbg('Timer complete — calling onComplete()');
+        onCompleteRef.current();
+      }
+    }, PHASE_TIMINGS.complete);
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !cancelled) {
+        edbg('Escape pressed — skipping intro');
         cancelled = true;
         onCompleteRef.current();
       }
@@ -55,6 +81,7 @@ export default function EntranceAnimation({ onComplete }: EntranceAnimationProps
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
+      edbg('Entrance unmounted — clearing timers', { cancelled });
       cancelled = true;
       clearTimeout(t1);
       clearTimeout(t2);
@@ -66,6 +93,7 @@ export default function EntranceAnimation({ onComplete }: EntranceAnimationProps
   }, []); // ← empty array: timers are created exactly once, never restarted
 
   const handleSkip = () => {
+    edbg('Skip button clicked — calling onComplete()');
     onCompleteRef.current();
   };
 

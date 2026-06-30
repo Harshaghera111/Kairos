@@ -116,19 +116,26 @@ const INITIAL_ARTIFACTS: Artifact[] = [
   }
 ];
 
+// ─── Diagnostic helper ────────────────────────────────────────────────────
+const T0 = performance.now();
+const dbg = (label: string, extra?: Record<string, unknown>) => {
+  const ms = (performance.now() - T0).toFixed(1);
+  // eslint-disable-next-line no-console
+  console.log(`%c[KAIROS ${ms}ms] ${label}`, 'color:#6366f1;font-weight:bold', extra ?? '');
+};
+
 export default function App() {
   // ─── Intro: read sessionStorage SYNCHRONOUSLY during state init so the
   //     component never mounts with view='intro' on a return visit.
   //     This eliminates the flash-of-dark-overlay race condition.
   const [view, setView] = useState<'intro' | 'landing' | 'entering' | 'dashboard'>(() => {
+    let ssVal: string | null = null;
     try {
-      return sessionStorage.getItem('kairos-intro-completed') === 'true'
-        ? 'landing'
-        : 'intro';
-    } catch {
-      // sessionStorage blocked (e.g. private-browsing strict mode) — show intro
-      return 'intro';
-    }
+      ssVal = sessionStorage.getItem('kairos-intro-completed');
+    } catch { /* blocked */ }
+    const initial = ssVal === 'true' ? 'landing' : 'intro';
+    dbg('useState initializer → view', { sessionStorage: ssVal, initial });
+    return initial;
   });
   const [activeTab, setActiveTab] = useState('commitments');
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -160,15 +167,31 @@ export default function App() {
   // Ref used by the auth effect so it can check the current view without
   // creating a stale-closure / re-subscription problem.
   const viewRef = React.useRef(view);
-  useEffect(() => { viewRef.current = view; }, [view]);
+  useEffect(() => {
+    viewRef.current = view;
+    dbg('view changed', { view });
+  }, [view]);
+
+  // ─── StrictMode detection ─────────────────────────────────────────────
+  useEffect(() => {
+    dbg('App mounted (StrictMode may call this twice)');
+    return () => dbg('App unmounted (StrictMode cleanup)');
+  }, []);
 
   // Sync Firebase authentication rules
   useEffect(() => {
+    dbg('Auth effect running', { isUsingMock, hasAuth: !!auth, hasDb: !!db });
     if (isUsingMock || !auth || !db) {
+      dbg('Auth effect: early exit (mock or no auth/db)');
       return;
     }
 
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      dbg('onAuthStateChanged fired', {
+        hasUser: !!firebaseUser,
+        uid: firebaseUser?.uid ?? null,
+        viewAtFire: viewRef.current,
+      });
       if (firebaseUser) {
         const profile: UserProfile = {
           uid: firebaseUser.uid,
@@ -178,27 +201,44 @@ export default function App() {
           createdAt: new Date().toISOString()
         };
         setUser(profile);
-        handleLoginSuccessTransition(profile);
+        // ─── GUARD: if intro is still playing, defer the login transition
+        //     until handleIntroComplete fires. A returning logged-in user
+        //     should still see the intro, then land on the dashboard.
+        if (viewRef.current === 'intro') {
+          dbg('Auth: logged-in user but intro still playing → deferring transition', { uid: firebaseUser.uid });
+          // Store the profile so handleIntroComplete can route to dashboard
+          (window as any).__kairosAutoLoginProfile = profile;
+        } else {
+          dbg('Auth: logged-in user, transitioning to dashboard');
+          handleLoginSuccessTransition(profile);
+        }
       } else {
         setUser(null);
-        // ─── FIX: Never interrupt the intro animation.
-        //     onAuthStateChanged fires ~100–400 ms after mount with
-        //     firebaseUser=null (no session). Without this guard it would
-        //     clobber view='intro' → 'landing' mid-animation on every first
-        //     visit, making the animation appear to "randomly skip".
+        dbg('Auth: no user', { viewAtFire: viewRef.current });
+        // Never interrupt the intro animation.
+        // onAuthStateChanged fires ~100–400 ms after mount with
+        // firebaseUser=null (no session). Without this guard it
+        // clobbers view='intro' → 'landing' mid-animation.
         if (viewRef.current !== 'intro') {
+          dbg('Auth: setView landing (not in intro)');
           setView('landing');
+        } else {
+          dbg('Auth: suppressed setView(landing) — intro is playing');
         }
-        setCommitments([]);
-        setSubtasks([]);
-        setWorkblocks([]);
-        setLogs([]);
-        setArtifacts([]);
+        // Only wipe seeded data if not in mock/sandbox mode
+        if (!isUsingMock) {
+          setCommitments([]);
+          setSubtasks([]);
+          setWorkblocks([]);
+          setLogs([]);
+          setArtifacts([]);
+        }
       }
     });
 
     return () => unsubscribeAuth();
   }, []);
+
 
   // Sync firestore collections
   useEffect(() => {
@@ -302,8 +342,17 @@ export default function App() {
   };
 
   const handleIntroComplete = () => {
+    dbg('handleIntroComplete called → marking sessionStorage, transitioning to landing');
     sessionStorage.setItem('kairos-intro-completed', 'true');
-    setView('landing');
+    // If a logged-in user was deferred during intro, route them to dashboard
+    const deferred = (window as any).__kairosAutoLoginProfile;
+    if (deferred) {
+      dbg('handleIntroComplete: deferred login found → routing to dashboard', { uid: deferred.uid });
+      delete (window as any).__kairosAutoLoginProfile;
+      handleLoginSuccessTransition(deferred);
+    } else {
+      setView('landing');
+    }
   };
 
   // Helper Firestore writers
