@@ -665,3 +665,297 @@ body {
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   LANDING PAGE LAYOUT
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Standard section vertical rhythm for the marketing page */
+.landing-section {
+  padding-top: 96px;
+  padding-bottom: 96px;
+}
+
+@media (max-width: 768px) {
+  .landing-section {
+    padding-top: 64px;
+    padding-bottom: 64px;
+  }
+}
+
+@media (max-width: 480px) {
+  .landing-section {
+    padding-top: 48px;
+    padding-bottom: 48px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ANIMATION KEYFRAMES
+   All custom animation keyframes used across the application.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Fade In ─────────────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.35s var(--ease-out-expo) both;
+}
+
+/* ── Fade In + Scale ──────────────────────────────────────────────────── */
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.97) translateY(8px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);   }
+}
+
+.animate-fadeInScale {
+  animation: fadeInScale 0.4s var(--ease-out-expo) both;
+}
+
+/* ── Float (gentle vertical bob) ─────────────────────────────────────── */
+@keyframes float {
+  0%, 100% { transform: translateY(0);    }
+  50%       { transform: translateY(-6px); }
+}
+
+.animate-float {
+  animation: float 3.2s ease-in-out infinite;
+}
+
+/* ── Float Slow (for empty-state icons) ─────────────────────────────── */
+@keyframes floatSlow {
+  0%, 100% { transform: translateY(0);    }
+  50%       { transform: translateY(-4px); }
+}
+
+.animate-floatSlow {
+  animation: floatSlow 4s ease-in-out infinite;
+}
+
+/* ── AI Thinking Dots (staggered bounce) ─────────────────────────────── */
+@keyframes thinkingBounce {
+  0%, 80%, 100% { transform: scaleY(1);   opacity: 0.4; }
+  40%           { transform: scaleY(1.7); opacity: 1;   }
+}
+
+.animate-thinking-1 {
+  animation: thinkingBounce 1.2s ease-in-out infinite;
+  animation-delay: 0ms;
+}
+
+.animate-thinking-2 {
+  animation: thinkingBounce 1.2s ease-in-out infinite;
+  animation-delay: 160ms;
+}
+
+.animate-thinking-3 {
+  animation: thinkingBounce 1.2s ease-in-out infinite;
+  animation-delay: 320ms;
+}
+
+/* ── Cursor Blink (typewriter cursor) ───────────────────────────────── */
+@keyframes cursorBlink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.animate-cursorBlink {
+  animation: cursorBlink 0.85s step-start infinite;
+}
+
+/* ── Slide Up Panel (AI analysis reveal) ────────────────────────────── */
+@keyframes slideUpPanel {
+  from { opacity: 0; transform: translateY(16px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+.animate-slideUpPanel {
+  animation: slideUpPanel 0.4s var(--ease-out-expo) both;
+}
+
+/* ── Slide Out Panel (AI analysis exit) ─────────────────────────────── */
+@keyframes slideOutPanel {
+  from { opacity: 1; transform: translateY(0)     scale(1);    }
+  to   { opacity: 0; transform: translateY(-10px) scale(0.98); }
+}
+
+.animate-slideOutPanel {
+  animation: slideOutPanel 0.3s var(--ease-in-expo) both;
+}
+
+/* ── Badge Reveal (staggered metric badges) ─────────────────────────── */
+@keyframes badgeReveal {
+  from { opacity: 0; transform: scale(0.85) translateY(4px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);   }
+}
+
+.animate-badgeReveal {
+  animation: badgeReveal 0.3s var(--ease-spring) both;
+}
+
+/* ── Analysis Progress Bar (full-width sweep) ───────────────────────── */
+@keyframes analysisProgress {
+  from { width: 0%;    }
+  to   { width: 100%;  }
+}
+
+.animate-analysisProgress {
+  animation: analysisProgress 3s var(--ease-out-expo) forwards;
+}
+
+/* ── Shimmer Slide (skeleton loading) ───────────────────────────────── */
+@keyframes shimmerSlide {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%);  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ANIMATION DELAY UTILITIES
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.delay-75  { animation-delay: 75ms;  }
+.delay-100 { animation-delay: 100ms; }
+.delay-150 { animation-delay: 150ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-500 { animation-delay: 500ms; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   FOCUS & ACCESSIBILITY POLISH
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Improve button focus rings throughout — consistent 2px indigo ring */
+button:focus-visible,
+a:focus-visible,
+[role="tab"]:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.6);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MICRO-INTERACTION POLISH
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Sidebar nav active strip — smoother transition */
+.sidebar-nav-item {
+  transition:
+    background var(--duration-fast) var(--ease-snap),
+    border-color var(--duration-fast) var(--ease-snap),
+    color var(--duration-fast) var(--ease-snap);
+}
+
+/* Card hover — use CSS class instead of inline handlers for consistency */
+.card-lift {
+  transition: transform var(--duration-normal) var(--ease-spring),
+              box-shadow var(--duration-normal) var(--ease-spring);
+}
+
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Timeline node hover scale — already in ActivityLog, ensure smooth */
+.timeline-node {
+  transition: transform var(--duration-fast) var(--ease-spring);
+}
+
+/* Progress bar fill — spring physics feel */
+.progress-fill {
+  transition: width 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Activity log card — slide-in on hover */
+.activity-card {
+  transition: transform var(--duration-fast) var(--ease-snap),
+              box-shadow var(--duration-fast) var(--ease-snap),
+              border-color var(--duration-fast) var(--ease-snap);
+}
+
+.activity-card:hover {
+  transform: translateX(3px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Btn active micro-press — already in base, reinforce */
+.btn:active:not(:disabled) {
+  transform: scale(0.975) !important;
+  transition-duration: 80ms !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TYPOGRAPHY REFINEMENTS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Improve legibility of small text globally via body-level antialiasing */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "kern" 1, "liga" 1;
+}
+
+
+/* Consistent line-height for badge text */
+.badge {
+  line-height: 1;
+  vertical-align: middle;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SURFACE & SHADOW POLISH
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Improve glassmorphism header — slightly more opaque for readability */
+.app-header {
+  background: rgba(250, 251, 252, 0.88);
+}
+
+/* Floating nav glass — consistent with app-header */
+.glass {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+/* Card shadow — ensure consistent shadow-sm baseline */
+.card {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+}
+
+/* Active card — subtle brand glow */
+.card-active {
+  box-shadow: 0 0 0 1px rgba(99,102,241,0.15),
+              0 4px 16px rgba(99,102,241,0.06);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   RESPONSIVE POLISH
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Ensure the floating header doesn't clip on very small screens */
+@media (max-width: 380px) {
+  header.fixed {
+    inset-x: 8px;
+  }
+
+  .landing-section {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+/* Mobile nav safe area — ensure labels don't get clipped */
+@media (max-width: 768px) {
+  .mobile-nav {
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+}
+
+/* Smooth image rendering for user avatars */
+img.rounded-full {
+  image-rendering: -webkit-optimize-contrast;
+}
+
