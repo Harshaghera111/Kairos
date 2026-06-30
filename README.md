@@ -299,7 +299,7 @@ Special thanks to the technologies that made Kairos possible:
 
 ### *The right plan is the one that adapts.*
 
-**Built for the Coding Ninjas × Google for Developers – VIBEzSHIP 2026 Hackathon**
+**Built for the Coding Ninjas × Google for Developers – VIBE2SHIP 2026 Hackathon**
 
 🌐 Live Demo
 
