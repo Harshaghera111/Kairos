@@ -23,7 +23,7 @@ https://kairos-1026481702555.us-central1.run.app
 
 # 🏆 Built For
 
-Kairos was developed as a submission for the **Coding Ninjas × Google for Developers – VIBEzSHIP 2026 Hackathon**.
+Kairos was developed as a submission for the **Coding Ninjas × Google for Developers – VIBE2SHIP 2026 Hackathon**.
 
 It showcases practical use of modern Google technologies, including:
 
