@@ -775,7 +775,7 @@ export default function App() {
   // Entering execution overlay
   if (view === 'entering') {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#060810] text-white">
+      <div className="theme-dark-intro fixed inset-0 z-50 flex flex-col items-center justify-center">
         <div className="space-y-4 text-center">
           <div className="relative w-16 h-16 mx-auto">
             <span className="animate-ping absolute inset-0 rounded-full bg-indigo-500 opacity-60" />

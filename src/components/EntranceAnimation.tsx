@@ -99,7 +99,7 @@ export default function EntranceAnimation({ onComplete }: EntranceAnimationProps
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#060810] text-white select-none"
+      className="theme-dark-intro fixed inset-0 z-50 flex flex-col items-center justify-center select-none"
       role="dialog"
       aria-label="Kairos intro animation"
       aria-modal="true"
